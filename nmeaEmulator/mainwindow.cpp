@@ -6,22 +6,9 @@ MainWindow::MainWindow(QWidget *parent)
   connect(&ping, &QTimer::timeout,
           this, &MainWindow::slotTimerPing);
   ping.setInterval(1000);
-  ping.start();
   QList<QSerialPortInfo> list;
   list = QSerialPortInfo::availablePorts();
 
-  m_serial = new QSerialPort;
-  //m_serial->setPort(list.at(0));
-  m_serial->setPortName("/dev/ttyUSB0");
-  m_serial->setBaudRate(QSerialPort::Baud9600);
-  m_serial->setDataBits(QSerialPort::Data8);
-  m_serial->setParity(QSerialPort::EvenParity);
-  m_serial->setStopBits(QSerialPort::OneStop);
-  m_serial->setFlowControl(QSerialPort::NoFlowControl);
-
-  if(!m_serial->open(QIODevice::ReadWrite)){
-    qDebug() << "OpenError";
-  }
 
 
   /*
@@ -47,18 +34,63 @@ void :: MainWindow::slotTimerPing(){
   northing += cos(qDegreesToRadians(angle)) * distanse;
 
   slotConvert(false);
-  QString nmeaSentence = QString("$GPGGA,123519,%1,%2,%3,%4,1,08,0.9,545.4,M,46.9,M ,  ,*47\n")
+  QString nmeaSentence = QString("$GPGGA,123519,%1,%2,%3,%4,1,08,0.9,545.4,M,46.9,*47\n")
                           .arg(nmeaLat)
                           .arg(north)
                           .arg(nmeaLon)
                           .arg(east);
   qint64 bytes = m_serial->write(QByteArray().append(nmeaSentence));
   qDebug() << "Tanslated " << bytes << " bytes.";
+  if(bytes > 0){
+    qDebug() << nmeaSentence;
+  }
+  /*
+  static int letter = 48;
+  QByteArray sendData;
+  for(int k = 0; k < 2; ++k){
+    sendData.append('$');
+    for(int i = 0; i<60/5; ++i){
+      sendData.append( QByteArray(5, letter++));
+    }
+    sendData.append('\n');
+  }
 
+
+  if(letter > 90)
+    letter = 48;
+  qint64 bytes = m_serial->write(sendData);
+  qDebug() << "Tanslated " << bytes << " bytes.";
+  if(bytes > 0){
+    qDebug() << sendData;
+  }
+  */
+}
+
+void
+MainWindow ::  connectToComPort(){
+  m_serial = new QSerialPort;
+  QString portName = QString("/dev/ttyUSB%1").arg(comPortNumber.value());
+  m_serial->setPortName(portName);
+  m_serial->setBaudRate(QSerialPort::Baud9600);
+  m_serial->setDataBits(QSerialPort::Data8);
+  m_serial->setParity(QSerialPort::EvenParity);
+  m_serial->setStopBits(QSerialPort::OneStop);
+  m_serial->setFlowControl(QSerialPort::NoFlowControl);
+
+  if(m_serial->open(QIODevice::ReadWrite)){
+    ping.start();
+    connected = true;
+  }
+  else{
+    qDebug() << "OpenError";
+  }
 }
 
 void
 MainWindow :: slotConvert(bool clicked){
+  if(!connected){
+    connectToComPort();
+  }
   _zone->setText(QString::number(zone));
   utmLat->setText(QString::number(int(easting)));
   utmLon->setText(QString::number(int(northing)));
@@ -135,6 +167,7 @@ MainWindow :: initElements(){
   _layout->addWidget(nmeaLatitude, 3, 1);
   _layout->addWidget(nmeaLongtitude, 3, 2);
 
+  _layout->addWidget(&comPortNumber, 4, 0);
   _layout->addWidget(convertButton, 4, 1);
   angleLabel = new QLabel("0");
   //angleLabel->

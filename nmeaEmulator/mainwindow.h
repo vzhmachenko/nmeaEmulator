@@ -17,6 +17,7 @@
 #include <QLineEdit>
 #include <QLabel>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QKeyEvent>
 #include <QTimer>
 /*
@@ -48,6 +49,9 @@ public:
   //-----------------------------------------------------
   QPushButton *convertButton;
   QLineEdit *_zone, *utmLat, *utmLon;
+  QSpinBox comPortNumber;
+  bool connected = false;
+
   QLabel *angleLabel;
 
   QLabel  *wgsLatitude, *wgsLongtitude;
@@ -83,6 +87,7 @@ private:
   int getZone( const QString &UTMZone, int &ZoneNumber, int &ZoneLetter );
   bool sepDot = true;
   void sendNmea();
+  void connectToComPort();
 
 protected:
 //    void paintEvent(QPaintEvent *event);
