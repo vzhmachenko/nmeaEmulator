@@ -101,8 +101,28 @@ MainWindow :: slotConvert(bool clicked){
 
      double lat = latitude.toFloat();
      double lon = longitude.toFloat();
-     lat = (lat - int(lat))*60 + int(lat)*100 ;
-     lon = (lon - int(lon))*60 + int(lon)*100;
+     double l1, l2, l3;
+
+     l1 = int(lat);                             // Берем целую часть
+     l2 = (lat - int(lat)) * 60;                 // Берем целую часть
+     l3 = (l2 - int(l2)) * 60;
+     lat = l1 * 100 + l2;// + l3/100;
+
+     l1 = int(lon);                             // Берем целую часть
+     l2 = (lon- int(lon)) * 60;                 // Берем целую часть
+     l3 = (l2 - int(l2)) * 60;
+     lon = l1 * 100 + l2;// + l3/100;
+     /*
+     l1 = int(lat);                             // Берем целую часть
+     l2 = (lat - int(lat)) * 60;                 // Берем целую часть
+     l3 = (l2 - int(l2)) * 60;
+     lat = l1 * 100 + int(l2) + l3/100;
+
+     l1 = int(lon);                             // Берем целую часть
+     l2 = (lon- int(lon)) * 60;                 // Берем целую часть
+     l3 = (l2 - int(l2)) * 60;
+     lon = l1 * 100 + int(l2) + l3/100;
+     */
 
      nmeaLat = QString::number(lat, 'g', 8);
      nmeaLon = QString::number(lon, 'g', 8);
