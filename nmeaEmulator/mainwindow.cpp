@@ -30,15 +30,14 @@ MainWindow::~MainWindow() {
 
 }
 void :: MainWindow::slotTimerPing(){
-  easting += sin(qDegreesToRadians(angle)) * distanse;
-  northing += cos(qDegreesToRadians(angle)) * distanse;
+  double sin_easting = sin(qDegreesToRadians(angle));
+  double cos_northing = cos(qDegreesToRadians(angle));
+  easting   = easting  + sin(qDegreesToRadians(angle)) * distanse;
+  northing  = northing + cos(qDegreesToRadians(angle)) * distanse;
 
   slotConvert(false);
   QString nmeaSentence = QString("$GPGGA,123519,%1,%2,%3,%4,1,08,0.9,545.4,M,46.9,*47\n")
-                          .arg(nmeaLat)
-                          .arg(north)
-                          .arg(nmeaLon)
-                          .arg(east);
+                          .arg(nmeaLat) .arg(north) .arg(nmeaLon) .arg(east);
   qint64 bytes = m_serial->write(QByteArray().append(nmeaSentence));
   qDebug() << "Tanslated " << bytes << " bytes.";
   if(bytes > 0){
@@ -91,57 +90,67 @@ MainWindow :: slotConvert(bool clicked){
   if(!connected){
     connectToComPort();
   }
+
   _zone->setText(QString::number(zone));
-  utmLat->setText(QString::number(int(easting)));
-  utmLon->setText(QString::number(int(northing)));
+  utmLat->setText(QString::number(easting));
+  utmLon->setText(QString::number(northing));
 
-  if(!convertUTMtoLL(_zone->text(), utmLat->text(), utmLon->text()) ){
-     wgsLatitude->setText(latitude);
-     wgsLongtitude->setText(longitude);
+  if(!convertUTMtoLL(zone, easting, northing) ){
+    wgsLatitude->setText(latitude);
+    wgsLongtitude->setText(longitude);
 
-     double lat = latitude.toFloat();
-     double lon = longitude.toFloat();
-     double l1, l2, l3;
+    setlocale (LC_ALL,"C");
 
-     l1 = int(lat);                             // Берем целую часть
-     l2 = (lat - int(lat)) * 60;                 // Берем целую часть
-     l3 = (l2 - int(l2)) * 60;
-     lat = l1 * 100 + l2;// + l3/100;
+    double lat = latitude.toFloat();
+    double lon = longitude.toFloat();
+    double l1, l2, l3;
 
-     l1 = int(lon);                             // Берем целую часть
-     l2 = (lon- int(lon)) * 60;                 // Берем целую часть
-     l3 = (l2 - int(l2)) * 60;
-     lon = l1 * 100 + l2;// + l3/100;
-     /*
-     l1 = int(lat);                             // Берем целую часть
-     l2 = (lat - int(lat)) * 60;                 // Берем целую часть
-     l3 = (l2 - int(l2)) * 60;
-     lat = l1 * 100 + int(l2) + l3/100;
 
-     l1 = int(lon);                             // Берем целую часть
-     l2 = (lon- int(lon)) * 60;                 // Берем целую часть
-     l3 = (l2 - int(l2)) * 60;
-     lon = l1 * 100 + int(l2) + l3/100;
-     */
+    l1 = int(lat);                             // Берем целую часть
+    l2 = (lat - int(lat)) * 60;                // Берем целую часть
+    lat = l1 * 100 + l2;
 
-     nmeaLat = QString::number(lat, 'g', 8);
-     nmeaLon = QString::number(lon, 'g', 8);
+    l1 = int(lon);                             // Берем целую часть
+    l2 = (lon - int(lon)) * 60;                // Берем целую часть
+    lon = l1 * 100 + l2;
 
-     if(nmeaLat >= 0){
-       north = "N";
-     }
-     else {
-       north = "S";
-     }
-     if (nmeaLon >= 0){
-       east = "E";
-     }
-     else{
-       east = "W";
-     }
+    /*
+    l1 = int(lat);                             // Берем целую часть
+    l2 = (lat - int(lat)) * 60;                // Берем целую часть
+    l3 = (l2 - int(l2)) * 60;
+    lat = l1 * 100 + int(l2) + l3/100;
 
-     nmeaLatitude->setText(nmeaLat) ;
-     nmeaLongtitude->setText(nmeaLon);
+    l1 = int(lon);                             // Берем целую часть
+    l2 = (lon- int(lon)) * 60;                 // Берем целую часть
+    l3 = (l2 - int(l2)) * 60;
+    lon = l1 * 100 + int(l2) + l3/100;
+    */
+    const   double    koef = 0.01666666666;          ///< Коефициент перевода
+    nmeaLat = QString::number(lat, 'g', 8);
+    nmeaLon = QString::number(lon, 'g', 8);
+
+    /*
+    char coord [10] = {0};
+    memcpy(coord, nmeaLat.toStdString().c_str(), nmeaLat.size());
+    double var = atof(coord);               ///< Переменная из сообщения
+    var = (var - (int)(var - (int)var % 100))
+        * koef + (int)(var - (int)var % 100) / 100;
+
+    nmeaLatitude->setText(nmeaLat) ;
+    nmeaLongtitude->setText(nmeaLon);
+    */
+    if(nmeaLat >= 0){
+     north = "N";
+    }
+    else {
+     north = "S";
+    }
+    if (nmeaLon >= 0){
+     east = "E";
+    }
+    else{
+     east = "W";
+    }
   }
 }
 
@@ -245,13 +254,14 @@ MainWindow :: formRightSight(){
 */
 
 int
-MainWindow::convertUTMtoLL(const QString &s_Zone,
-                               const QString &s_Easting,
-                               const QString &s_Northing){
+MainWindow::convertUTMtoLL(const int &s_Zone,
+                               const double &s_Easting,
+                               const double &s_Northing){
 
+    int digitsLL = 6;
+    /*
     QString sd_Easting  = s_Easting;
     QString sd_Northing = s_Northing;
-    int digitsLL = 6;
 
     sd_Easting.replace( ",", "." );
     sd_Northing.replace( ",", "." );
@@ -259,6 +269,7 @@ MainWindow::convertUTMtoLL(const QString &s_Zone,
     zone        = s_Zone.toInt();
     easting     = sd_Easting.toDouble();
     northing    = sd_Northing.toDouble();
+    */
 
 // **********************************************************************************************
 
@@ -290,7 +301,7 @@ MainWindow::convertUTMtoLL(const QString &s_Zone,
 
 /*****************************************************************************/
 
-    if ( getZone( s_Zone, ZoneNumber, ZoneLetter ) < 0 )
+    if ( getZone(QString::number( s_Zone), ZoneNumber, ZoneLetter ) < 0 )
         err = -1;
 
     if ( ( ZoneLetter < 78 ) && ( ( dUTMNorthing < 1118385 ) || ( dUTMNorthing > 9999999 ) ) )

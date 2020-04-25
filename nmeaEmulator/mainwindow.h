@@ -20,6 +20,9 @@
 #include <QSpinBox>
 #include <QKeyEvent>
 #include <QTimer>
+
+#include <locale.h>     //setLocale
+#include <stdlib.h>     //atof
 /*
 #include <QImageReader>
 #include <QColorSpace>
@@ -54,6 +57,7 @@ public:
 
   QLabel *angleLabel;
 
+
   QLabel  *wgsLatitude, *wgsLongtitude;
   QLabel  *nmeaLatitude, *nmeaLongtitude;
   QGridLayout *_layout;
@@ -67,7 +71,7 @@ public:
   int zone = 36;
   double  easting = 298849.0;
   double  northing = 5536044.0;
-  int distanse = 3;
+  double distanse = 1.0;
   QTimer ping;
 
 
@@ -81,9 +85,9 @@ private:
   QSerialPort *m_serial = nullptr;
   void initElements();
   void formRightSight();
-  int convertUTMtoLL(const QString &s_Zone,
-                     const QString &s_Easting,
-                     const QString &s_Northing);
+  int convertUTMtoLL(const int &s_Zone,
+                     const double &s_Easting,
+                     const double &s_Northing);
   int getZone( const QString &UTMZone, int &ZoneNumber, int &ZoneLetter );
   bool sepDot = true;
   void sendNmea();
