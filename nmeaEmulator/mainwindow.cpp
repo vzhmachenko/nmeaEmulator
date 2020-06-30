@@ -3,72 +3,162 @@
 MainWindow::MainWindow(QWidget *parent)
                       : QWidget(parent) {
   initElements();
-  connect(&ping, &QTimer::timeout,
-          this, &MainWindow::slotTimerPing);
-  ping.setInterval(1000);
-  QList<QSerialPortInfo> list;
-  list = QSerialPortInfo::availablePorts();
-
-
-
-  /*
-  horizontalLay = new QHBoxLayout;
-  /*coordPainter.setPen(QPen(Qt::black, 12, Qt::DashDotLine, Qt::RoundCap));
-  coordPainter.drawLine(QLineF(10.0, 80.0, 90.0, 20.0) );
-  coordPainter.drawPixmap(0, 0, 400, 400, coordPixmap);
-
-  coordLabel.setPixmap(coordPixmap);
-  coordLabel.setFixedSize(400,400);
-  */
-
-//  horizontalLay->addWidget(&coordLabel);
-//  formRightSight();
-//  this->setLayout(horizontalLay);
 }
 
 MainWindow::~MainWindow() {
 
 }
-void :: MainWindow::slotTimerPing(){
-  double sin_easting = sin(qDegreesToRadians(angle));
-  double cos_northing = cos(qDegreesToRadians(angle));
-  easting   = easting  + sin(qDegreesToRadians(angle)) * distanse;
-  northing  = northing + cos(qDegreesToRadians(angle)) * distanse;
 
-  slotConvert(false);
-  QString nmeaSentence = QString("$GPGGA,123519,%1,%2,%3,%4,1,08,0.9,545.4,M,46.9,*47\n")
-                          .arg(nmeaLat) .arg(north) .arg(nmeaLon) .arg(east);
+
+/// Действие после нажатия кнопи старт.
+void
+MainWindow :: startButton(bool clicked) {
+  //-- Если не подключены к СОМ пору то подключаемся.
+  if(!connected){
+    connectToComPort();
+  }
+  //-- Если подключены
+  if(connected){
+    //-- Устанавливаем вызов для таймера с периодом времени.
+    connect(&ping,  &QTimer::timeout,
+            this,   &MainWindow::slotTimerPing);
+    ping.setInterval(600);
+  }
+}
+
+
+/// Обработчик вызова таймера.
+void
+MainWindow::slotTimerPing(){
+  static quint8 count = 0;
+
+  double rad = qDegreesToRadians((double)angleSB.value());
+  double sin_easting = sin(qDegreesToRadians((double)angleSB.value()));
+  double cos_northing = cos(qDegreesToRadians((double)angleSB.value()));
+  easting   = easting  + sin(qDegreesToRadians((double)angleSB.value())) * distanse;
+  northing  = northing + cos(qDegreesToRadians((double)angleSB.value())) * distanse;
+
+  convertData(false);
+  QString nmeaSentence;
+  count++;
+  switch (count % 4) {
+  case 0: {
+    nmeaSentence = QString("$GPGGA,123519,%1,%2,%3,%4,1,08,0.9,545.4,M,46.9,*47\n")
+                        .arg(nmeaLat) .arg(north) .arg(nmeaLon) .arg(east);
+    break;
+  }
+
+  case 1: {
+    nmeaSentence = QString("$GPVTG,t,T,,,s.ss,N,s.ss,K*hh\n");
+    break;
+  }
+
+  case 2: {
+    nmeaSentence = QString("$GPRMC,%1,A,%2,%3,%4,%5,000.0,%6.0,%7,020.3,E*68\n")
+                    .arg(QDateTime::currentDateTime().toString("hhmmss"))
+                    .arg(nmeaLat) .arg(north) .arg(nmeaLon) .arg(east)
+                    .arg(angleSB.value())
+                    .arg(QDateTime::currentDateTime().toString("ddMMyy"));
+    break;
+  }
+
+  case 3: {
+    nmeaSentence = QString("$GPGLL,%1,%2,%3,%4*75\n")
+                    .arg(nmeaLat) .arg(north) .arg(nmeaLon) .arg(east);
+    break;
+  }
+
+  default:
+    nmeaSentence = QString("$GPGGA,123519,%1,%2,%3,%4,1,08,0.9,545.4,M,46.9,*47\n")
+                        .arg(nmeaLat) .arg(north) .arg(nmeaLon) .arg(east);
+  }
+
   qint64 bytes = m_serial->write(QByteArray().append(nmeaSentence));
   qDebug() << "Tanslated " << bytes << " bytes.";
   if(bytes > 0){
     qDebug() << nmeaSentence;
   }
-  /*
-  static int letter = 48;
-  QByteArray sendData;
-  for(int k = 0; k < 2; ++k){
-    sendData.append('$');
-    for(int i = 0; i<60/5; ++i){
-      sendData.append( QByteArray(5, letter++));
-    }
-    sendData.append('\n');
-  }
-
-
-  if(letter > 90)
-    letter = 48;
-  qint64 bytes = m_serial->write(sendData);
-  qDebug() << "Tanslated " << bytes << " bytes.";
-  if(bytes > 0){
-    qDebug() << sendData;
-  }
-  */
 }
 
+
+/// Инициализация графических объектов.
+void
+MainWindow :: initElements(){
+
+  //-- Некоторые значения для выбора угла движения.
+  angleSB.setRange(0, 360 - 1);
+  angleSB.setWrapping(true);
+  angleSB.setValue(180);
+
+
+  // Слой.
+  QHBoxLayout* hLayout = new QHBoxLayout();
+  QGridLayout* layout = new QGridLayout();
+
+  QPushButton* startB = new QPushButton("Start", this);             ///< Кнопка запуска работы программы.
+  connect(startB, &QPushButton::clicked,
+          this,   &MainWindow::startButton);
+
+  QLabel* LatitudeLbl   = new QLabel("Довгота, верт");
+  QLabel* LongtitudeLbl = new QLabel("Широта, гориз");
+  QLabel* ZoneLbl       = new QLabel("Zone");
+  QLabel* DecimalLbl    = new QLabel("Decimal:");
+  QLabel* NMEALbl       = new QLabel("NMEA:");
+  QLabel* comNumLbl     = new QLabel("COM №:");
+  QLabel* angleLbl      = new QLabel("Angle:");
+
+
+  layout->addWidget(ZoneLbl, 0, 0);
+  layout->addWidget(LatitudeLbl, 0, 1);
+  layout->addWidget(LongtitudeLbl, 0, 2);
+
+  layout->addWidget(&zoneLE, 1, 0);
+  layout->addWidget(&utmLatLE, 1, 1);
+  layout->addWidget(&utmLonLE, 1, 2);
+
+  layout->addWidget(DecimalLbl, 2, 0);
+  layout->addWidget(&wgsLatitudeL, 2, 1);
+  layout->addWidget(&wgsLongtitudeL, 2, 2);
+
+  layout->addWidget(NMEALbl, 3, 0);
+  layout->addWidget(&nmeaLatitudeL, 3, 1);
+  layout->addWidget(&nmeaLongtitudeL, 3, 2);
+
+  layout->addWidget(comNumLbl, 4, 0);
+  layout->addWidget(&comPortNumberSB, 4, 1);
+
+  layout->addWidget(angleLbl, 5, 0);
+  layout->addWidget(&angleSB, 5, 1);
+
+  layout->addWidget(startB, 6, 1);
+
+  hLayout->addLayout(layout);
+
+
+  view = new QGraphicsView;
+  scene = new QGraphicsScene(view);
+  QPen pen(Qt::green);
+  QPainter *k =  new QPainter;
+
+  k->drawPoint(20,20);
+
+  scene->addLine(0, 90, 180, 90, pen);
+  scene->addLine(90, 0, 90, 180, pen);
+  scene->addEllipse(20.0, 20.0, 1, 1, pen);
+  view->setScene(scene);
+  hLayout->addWidget(view);
+
+
+  this->setLayout(hLayout);
+  this->show();
+}
+
+
+/// Порядок подключения к COM порту.
 void
 MainWindow ::  connectToComPort(){
   m_serial = new QSerialPort;
-  QString portName = QString("/dev/ttyUSB%1").arg(comPortNumber.value());
+  QString portName = QString("/dev/ttyUSB%1").arg(comPortNumberSB.value());
   m_serial->setPortName(portName);
   m_serial->setBaudRate(QSerialPort::Baud9600);
   m_serial->setDataBits(QSerialPort::Data8);
@@ -86,18 +176,15 @@ MainWindow ::  connectToComPort(){
 }
 
 void
-MainWindow :: slotConvert(bool clicked){
-  if(!connected){
-    connectToComPort();
-  }
+MainWindow :: convertData(bool clicked){
 
-  _zone->setText(QString::number(zone));
-  utmLat->setText(QString::number(easting));
-  utmLon->setText(QString::number(northing));
+  zoneLE.setText(QString::number(zone));
+  utmLatLE.setText(QString::number(easting, 'g', 8));
+  utmLonLE.setText(QString::number(northing, 'g', 8));
 
-  if(!convertUTMtoLL(zone, easting, northing) ){
-    wgsLatitude->setText(latitude);
-    wgsLongtitude->setText(longitude);
+  if(convertUTMtoLL() == 0){
+    wgsLatitudeL.setText(latitude);
+    wgsLongtitudeL.setText(longitude);
 
     setlocale (LC_ALL,"C");
 
@@ -125,10 +212,11 @@ MainWindow :: slotConvert(bool clicked){
     l3 = (l2 - int(l2)) * 60;
     lon = l1 * 100 + int(l2) + l3/100;
     */
-    const   double    koef = 0.01666666666;          ///< Коефициент перевода
     nmeaLat = QString::number(lat, 'g', 8);
     nmeaLon = QString::number(lon, 'g', 8);
 
+    nmeaLatitudeL.setText(nmeaLat);
+    nmeaLongtitudeL.setText(nmeaLon);
     /*
     char coord [10] = {0};
     memcpy(coord, nmeaLat.toStdString().c_str(), nmeaLat.size());
@@ -154,123 +242,13 @@ MainWindow :: slotConvert(bool clicked){
   }
 }
 
-void
-MainWindow :: initElements(){
-  _layout = new QGridLayout(this);
-
-  convertButton = new QPushButton("Convert", this);
-  connect(convertButton, &QPushButton::clicked,
-          this,          &MainWindow::slotConvert);
-
-  _zone   = new QLineEdit(this);
-  utmLat  = new QLineEdit( this);
-  utmLon  = new QLineEdit( this);
-
-  QLabel *latLabel, *lonLabel, *zoneLabel;
-  latLabel  = new QLabel("Latitude");
-  lonLabel  = new QLabel("Longtitude");
-  zoneLabel = new QLabel("Zone");
-
-  QLabel *dec = new QLabel("Decimal:");
-  QLabel *nmea = new QLabel("NMEA:");
-
-  wgsLatitude   = new QLabel();
-  wgsLongtitude = new QLabel();
-
-  nmeaLatitude = new QLabel();
-  nmeaLongtitude = new QLabel();
-
-  _layout->addWidget(zoneLabel, 0, 0);
-  _layout->addWidget(latLabel, 0, 1);
-  _layout->addWidget(lonLabel, 0, 2);
-
-  _layout->addWidget(_zone, 1, 0);
-  _layout->addWidget(utmLat, 1, 1);
-  _layout->addWidget(utmLon, 1, 2);
-
-  _layout->addWidget(dec, 2, 0);
-  _layout->addWidget(wgsLatitude, 2, 1);
-  _layout->addWidget(wgsLongtitude, 2, 2);
-
-  _layout->addWidget(nmea, 3, 0);
-  _layout->addWidget(nmeaLatitude, 3, 1);
-  _layout->addWidget(nmeaLongtitude, 3, 2);
-
-  _layout->addWidget(&comPortNumber, 4, 0);
-  _layout->addWidget(convertButton, 4, 1);
-  angleLabel = new QLabel("0");
-  //angleLabel->
-  angleLabel->setMinimumSize(100, 100);
-  _layout->addWidget(convertButton, 4, 1);
-  _layout->addWidget(angleLabel, 5, 1);
-
-  this->setLayout(_layout);
-  this->show();
-}
-
-/*
-void
-MainWindow::paintEvent(QPaintEvent *event) {
-/*    QPainter painter(this);
-    painter.setPen(QPen(Qt::black, 1, Qt::DashDotLine, Qt::RoundCap));
-    painter.drawLine(0, 0, 200, 200);
-    */
-
-/*
-  coordPainter.setPen(QPen(Qt::black, 12, Qt::DashDotLine, Qt::RoundCap));
-  coordPainter.drawLine(QLineF(10.0, 80.0, 90.0, 20.0) );
-  coordPainter.drawPixmap(0, 0, 400, 400, coordPixmap);
-
-  coordLabel.setPixmap(coordPixmap);
-  coordLabel.setFixedSize(400,400);
-}
-*/
 
 
-/*
-void
-MainWindow :: formRightSight(){
-  QVBoxLayout *rightSightLay = new QVBoxLayout;
-
-  imageLabel.setBackgroundRole(QPalette::Base);
-  imageLabel.setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
-  imageLabel.setScaledContents(true);
-  QImageReader imageReader(QString("%1/arrow.png")
-                           .arg(QDir().absolutePath()));
-  image = imageReader.read();
-  if(image.colorSpace().isValid()){
-    image.convertToColorSpace(QColorSpace::SRgb);
-  }
-  pm = QPixmap::fromImage(image);
-  rm.rotate(95);
-  pm = pm.transformed(rm);
-
-  imageLabel.setPixmap(pm);
-  imageLabel.setFixedSize(QSize(100,100));
-
-  rightSightLay->addWidget(&imageLabel);
-  horizontalLay->addLayout(rightSightLay);
-}
-*/
-
+/// Конвертация координат из UTM в WGS
 int
-MainWindow::convertUTMtoLL(const int &s_Zone,
-                               const double &s_Easting,
-                               const double &s_Northing){
+MainWindow::convertUTMtoLL(){
 
     int digitsLL = 6;
-    /*
-    QString sd_Easting  = s_Easting;
-    QString sd_Northing = s_Northing;
-
-    sd_Easting.replace( ",", "." );
-    sd_Northing.replace( ",", "." );
-
-    zone        = s_Zone.toInt();
-    easting     = sd_Easting.toDouble();
-    northing    = sd_Northing.toDouble();
-    */
-
 // **********************************************************************************************
 
     int	   err              = 0;
@@ -301,7 +279,7 @@ MainWindow::convertUTMtoLL(const int &s_Zone,
 
 /*****************************************************************************/
 
-    if ( getZone(QString::number( s_Zone), ZoneNumber, ZoneLetter ) < 0 )
+    if ( getZone(QString::number( zone), ZoneNumber, ZoneLetter ) < 0 )
         err = -1;
 
     if ( ( ZoneLetter < 78 ) && ( ( dUTMNorthing < 1118385 ) || ( dUTMNorthing > 9999999 ) ) )
@@ -358,9 +336,9 @@ MainWindow::convertUTMtoLL(const int &s_Zone,
     return( err );
 }
 
+/// Статус вычисления UTM зоны.
 int
-MainWindow::getZone( const QString &UTMZone, int &ZoneNumber, int &ZoneLetter )
-{
+MainWindow::getZone( const QString &UTMZone, int &ZoneNumber, int &ZoneLetter ) {
     if ( ( UTMZone.isEmpty() == true ) || ( UTMZone == "_ERROR_" ) )
         return (-1);
 
@@ -388,60 +366,3 @@ MainWindow::getZone( const QString &UTMZone, int &ZoneNumber, int &ZoneLetter )
     return( 0 );
 }
 
-void
-MainWindow :: keyPressEvent(QKeyEvent *event){
-  int key = event->key();
-  if(key == Qt::Key_Left || key == Qt::Key_Down){
-    angle -= 1;
-    if(angle < 0)
-      angle = 359;
-    angleLabel->setText(QString::number(angle));
-  }
-
-  if(key == Qt::Key_Right || key == Qt::Key_Up){
-    angle+= 1;
-    if(angle > 359)
-      angle = 0;
-    angleLabel->setText(QString::number(angle));
-  }
-}
-/*!
- * Парсим GGA-сообщение
- *GGA Global Positioning System Fix Data. Time, Position and fix related data for a GPS receiver
- * $GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M ,  ,*47
- *    0     1      2      3    4      5 6  7  8   9    10 11  12 13  14
- *          Time   Lat         Lon
- *         1         2    3    4     5 6  7  8   9  10 11 12 13   14 15
- *         |         |    |    |     | |  |  |   |  |  |  |  |    |  |
- *$--GGA,hhmmss.ss,llll.ll,a,yyyyy.yy,a,x,xx,x.x,x.x,M,x.x,M,x.x,xxxx*hh
- *1) Time (UTC)
- *2) Latitude
- *3) N or S (North or South)
- *4) Longitude
- *5) E or W (East or West)
- *6) GPS Quality Indicator,
- *    0 - fix not available,
- *    1 - GPS fix,
- *    2 - Differential GPS fix
- *7) Number of satellites in view, 00 - 12
- *8) Horizontal Dilution of precision
- *9) Antenna Altitude above/below mean-sea-level (geoid)
- *10) Units of antenna altitude, meters
- *11) Geoidal separation, the difference between the WGS-84 earth
- *    ellipsoid and mean-sea-level (geoid), "-" means mean-sea-level below ellipsoid
- *12) Units of geoidal separation, meters
- *13) Age of differential GPS data, time in seconds since last SC104
- *    type 1 or 9 update, null field when DGPS is not used
- *14) Differential reference station ID, 0000-1023
- *15) Checksum
- */
-void
-MainWindow :: sendNmea(){
-  QString nmeaSentence = QString("$GPGGA,123519,%1,%2,%3,%4,1,08,0.9,545.4,M,46.9,M ,  ,*47")
-                          .arg(nmeaLat)
-                          .arg(north)
-                          .arg(nmeaLon)
-                          .arg(east);
-
-
-}

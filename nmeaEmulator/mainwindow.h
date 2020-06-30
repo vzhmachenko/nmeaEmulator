@@ -13,6 +13,11 @@
 #include <QSerialPortInfo>
 
 #include <QGridLayout>
+#include <QHBoxLayout>
+
+#include <QGraphicsView>
+#include <QGraphicsScene>
+#include <QPainter>
 
 #include <QLineEdit>
 #include <QLabel>
@@ -20,6 +25,7 @@
 #include <QSpinBox>
 #include <QKeyEvent>
 #include <QTimer>
+#include <QDateTime>
 
 #include <locale.h>     //setLocale
 #include <stdlib.h>     //atof
@@ -29,6 +35,8 @@
 #include <QDir>
 #include <QImage>
 #include <QPainter>
+
+
 */
 
 
@@ -36,66 +44,67 @@ class MainWindow : public QWidget{
   Q_OBJECT
 public:
   MainWindow(QWidget *parent = nullptr);
-  //---------------------------------
-  /*
-  QHBoxLayout *horizontalLay;
-
-  QPainter coordPainter;
-  QPixmap coordPixmap;
-  QLabel coordLabel;
-
-  QImage image;
-  QLabel imageLabel;
-  QPixmap pm;
-  QMatrix rm;
-  */
-  //-----------------------------------------------------
-  QPushButton *convertButton;
-  QLineEdit *_zone, *utmLat, *utmLon;
-  QSpinBox comPortNumber;
-  bool connected = false;
-
-  QLabel *angleLabel;
+  ~MainWindow();
 
 
-  QLabel  *wgsLatitude, *wgsLongtitude;
-  QLabel  *nmeaLatitude, *nmeaLongtitude;
-  QGridLayout *_layout;
+public slots:
+    /// Действие после нажатия кнопи старт.
+    void startButton(bool clicked);
+
+
+    /// Обработчик вызова таймера.
+    void slotTimerPing();
+
+private:
+  QGraphicsView*  view;
+  QGraphicsScene* scene;
+
+  QTimer ping;                      ///< Таймер для генерации новой строки NMEA.
+  QSerialPort *m_serial = nullptr;  ///< Объект COM порта.
+
+  bool connected = false;           ///< Флаг соединения.
+
+  QLineEdit zoneLE,                 ///< Значение Зоны (UTM).
+            utmLatLE,               ///< Значение Широты (UTM).
+            utmLonLE;               ///< Значение Долготы(UTM).
+
+  QLabel    wgsLatitudeL,           ///< Широта (decimal).  horizontal
+            wgsLongtitudeL,         ///< Долгота (decimal). vertical
+            nmeaLatitudeL,          ///< Широта (NMEA).
+            nmeaLongtitudeL;        ///< Долгота (NMEA).
+
+  QSpinBox  comPortNumberSB,        ///< Номер COM порта.
+            angleSB;                ///< Угол движения.
+
 
   QString latitude;   ///< resultOfConvertation
   QString longitude;  ///< resultOfConvertation
   QString nmeaLat, nmeaLon;
   QString north, east;
 
-  double angle = 0;
   int zone = 36;
-  double  easting = 298849.0;
-  double  northing = 5536044.0;
-  double distanse = 1.0;
-  QTimer ping;
+  double  easting = 298849.0;       ///< Широта
+  double  northing = 5536044.0;     ///< Долгота
+  const double distanse = 1.0;            ///< Изменение координат.
 
 
-  ~MainWindow();
-
-public slots:
-    void slotConvert(bool clicked);
-    void slotTimerPing();
-
-private:
-  QSerialPort *m_serial = nullptr;
+  /// Инициализация графических объектов.
   void initElements();
-  void formRightSight();
-  int convertUTMtoLL(const int &s_Zone,
-                     const double &s_Easting,
-                     const double &s_Northing);
-  int getZone( const QString &UTMZone, int &ZoneNumber, int &ZoneLetter );
-  bool sepDot = true;
-  void sendNmea();
+
+  /// Порядок подключения к COM порту.
   void connectToComPort();
 
-protected:
-//    void paintEvent(QPaintEvent *event);
-  void keyPressEvent(QKeyEvent *event);
+  void convertData(bool clicked);
+
+  /// Конвертация координат из UTM в WGS
+  int convertUTMtoLL();
+
+  /// Статус вычисления UTM зоны.
+  int getZone( const QString &UTMZone,
+               int &ZoneNumber,
+               int &ZoneLetter );
+  bool sepDot = true;
+
 };
 
 
