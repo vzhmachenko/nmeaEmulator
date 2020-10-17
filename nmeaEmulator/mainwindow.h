@@ -27,6 +27,11 @@
 #include <QTimer>
 #include <QDateTime>
 
+#include <QChart>
+#include <QLineSeries>
+#include <QChartView>
+#include <QValueAxis>
+
 #include <locale.h>     //setLocale
 #include <stdlib.h>     //atof
 /*
@@ -38,6 +43,7 @@
 
 
 */
+QT_CHARTS_USE_NAMESPACE
 
 
 class MainWindow : public QWidget{
@@ -56,38 +62,52 @@ public slots:
     void slotTimerPing();
 
 private:
-  QGraphicsView*  view;
-  QGraphicsScene* scene;
+  QHBoxLayout mainLayout;
+    QGridLayout layout;
+      QLabel  LatitudeLbl,
+              LongtitudeLbl,
+              ZoneLbl,
+              DecimalLbl,
+              NMEALbl,
+              comNumLbl,
+              angleLbl,
+              wgsLatitudeL,           ///< Широта (decimal).  horizontal
+              wgsLongtitudeL,         ///< Долгота (decimal). vertical
+              nmeaLatitudeL,          ///< Широта (NMEA).
+              nmeaLongtitudeL;        ///< Долгота (NMEA).
+      QLineEdit zoneLE,                 ///< Значение Зоны (UTM).
+                utmLatLE,               ///< Значение Широты (UTM).
+                utmLonLE;               ///< Значение Долготы(UTM).
+      QSpinBox  comPortNumberSB,        ///< Номер COM порта.
+                angleSB;                ///< Угол движения.
+      QPushButton startB;
+    QChartView  chartView;
+    QChart      chart;
+    QLineSeries ls;
+    QValueAxis x_axe, y_axe;
 
+private:
   QTimer ping;                      ///< Таймер для генерации новой строки NMEA.
   QSerialPort *m_serial = nullptr;  ///< Объект COM порта.
 
   bool connected = false;           ///< Флаг соединения.
-
-  QLineEdit zoneLE,                 ///< Значение Зоны (UTM).
-            utmLatLE,               ///< Значение Широты (UTM).
-            utmLonLE;               ///< Значение Долготы(UTM).
-
-  QLabel    wgsLatitudeL,           ///< Широта (decimal).  horizontal
-            wgsLongtitudeL,         ///< Долгота (decimal). vertical
-            nmeaLatitudeL,          ///< Широта (NMEA).
-            nmeaLongtitudeL;        ///< Долгота (NMEA).
-
-  QSpinBox  comPortNumberSB,        ///< Номер COM порта.
-            angleSB;                ///< Угол движения.
-
 
   QString latitude;   ///< resultOfConvertation
   QString longitude;  ///< resultOfConvertation
   QString nmeaLat, nmeaLon;
   QString north, east;
 
+  bool axesSett = false;
+
   int zone = 36;
   double  easting = 298849.0;       ///< Широта
   double  northing = 5536044.0;     ///< Долгота
   const double distanse = 1.0;            ///< Изменение координат.
+  bool sepDot = true;
 
 
+
+private:
   /// Инициализация графических объектов.
   void initElements();
 
@@ -103,8 +123,19 @@ private:
   int getZone( const QString &UTMZone,
                int &ZoneNumber,
                int &ZoneLetter );
-  bool sepDot = true;
 
+  void setGuiText();
+  void setGuiPlacement();
+  void setDefParams();
+  void setConnections();
+
+  void changeBorders(qreal minX,
+                     qreal maxX,
+                     qreal minY,
+                     qreal maxY);
+  void getLastMeasMinMax();
+  qreal getMinVal(const QList <qreal> &list);
+  qreal getMaxVal(const QList <qreal> &list);
 };
 
 

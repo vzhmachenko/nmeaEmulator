@@ -3,6 +3,23 @@
 MainWindow::MainWindow(QWidget *parent)
                       : QWidget(parent) {
   initElements();
+
+
+  chart.addSeries(&ls);
+  chart.legend()->hide();
+
+  chart.addAxis(&x_axe, Qt::AlignBottom);
+  chart.addAxis(&y_axe, Qt::AlignLeft);
+
+  ls.attachAxis(&x_axe);
+  ls.attachAxis(&y_axe);
+
+  chartView.setChart(&chart);
+  chartView.setRenderHint(QPainter::Antialiasing);
+  mainLayout.addWidget(&chartView);
+
+  connected = true;
+
 }
 
 MainWindow::~MainWindow() {
@@ -20,9 +37,9 @@ MainWindow :: startButton(bool clicked) {
   //-- Если подключены
   if(connected){
     //-- Устанавливаем вызов для таймера с периодом времени.
-    connect(&ping,  &QTimer::timeout,
-            this,   &MainWindow::slotTimerPing);
-    ping.setInterval(600);
+    connect(&ping,  &QTimer     ::  timeout,
+            this,   &MainWindow ::  slotTimerPing);
+    ping.start(100);
   }
 }
 
@@ -32,8 +49,8 @@ void
 MainWindow::slotTimerPing(){
   static quint8 count = 0;
 
-  double rad = qDegreesToRadians((double)angleSB.value());
-  double sin_easting = sin(qDegreesToRadians((double)angleSB.value()));
+  double rad          = qDegreesToRadians((double)angleSB.value());
+  double sin_easting  = sin(qDegreesToRadians((double)angleSB.value()));
   double cos_northing = cos(qDegreesToRadians((double)angleSB.value()));
   easting   = easting  + sin(qDegreesToRadians((double)angleSB.value())) * distanse;
   northing  = northing + cos(qDegreesToRadians((double)angleSB.value())) * distanse;
@@ -73,101 +90,177 @@ MainWindow::slotTimerPing(){
                         .arg(nmeaLat) .arg(north) .arg(nmeaLon) .arg(east);
   }
 
-  qint64 bytes = m_serial->write(QByteArray().append(nmeaSentence));
-  qDebug() << "Tanslated " << bytes << " bytes.";
+  //qint64 bytes = m_serial->write(QByteArray().append(nmeaSentence));
+  ls.append(northing, easting);
+  if(!axesSett){
+    x_axe.setMin(northing - 50);
+    x_axe.setMax(northing + 50);
+    y_axe.setMin(easting - 50);
+    y_axe.setMax(easting + 50);
+    axesSett = true;
+  }
+  getLastMeasMinMax();
+  //qDebug() << "Tanslated " << bytes << " bytes.";
+  /*
   if(bytes > 0){
     qDebug() << nmeaSentence;
   }
+  */
+}
+
+void
+MainWindow :: changeBorders(qreal minX,
+                            qreal maxX,
+                            qreal minY,
+                            qreal maxY){
+    qlonglong newMinX = minX < x_axe.min() ? minX : x_axe.min();
+    qlonglong newMaxX = maxX > x_axe.max() ? maxX : x_axe.max();
+    qlonglong newMinY = minY < y_axe.min() ? minY : y_axe.min();
+    qlonglong newMaxY = maxY > y_axe.max() ? maxY : y_axe.max();
+
+    quint8 scaleVal = 50;
+    newMaxX += newMaxX % scaleVal
+             ? scaleVal - newMaxX % scaleVal
+             : 0;
+    newMaxY += newMaxY % scaleVal
+             ? scaleVal - newMaxY % scaleVal
+             : 0;
+
+    newMinX -= newMinX % scaleVal
+             ? scaleVal + newMinX % scaleVal
+             : 0;
+    newMinY -= newMinY % scaleVal
+             ? scaleVal + newMinY % scaleVal
+             : 0;
+
+    x_axe.setMin(newMinX);
+    x_axe.setMax(newMaxX);
+    y_axe.setMin(newMinY);
+    y_axe.setMax(newMaxY);
+}
+
+void
+MainWindow :: getLastMeasMinMax(){
+  static QList <qreal> tempXVal;
+  static QList <qreal> tempYVal;
+  static quint8 counter = 0;
+  if(!(++counter % 10)){
+    counter = 0;
+    changeBorders(getMinVal(tempXVal),
+                  getMaxVal(tempXVal),
+                  getMinVal(tempYVal),
+                  getMaxVal(tempYVal));
+    tempXVal.clear();
+    tempYVal.clear();
+  }
+  tempXVal.append(ls.at(ls.count() - 1).x());
+  tempYVal.append(ls.at(ls.count() - 1).y());
+}
+
+qreal
+MainWindow :: getMinVal(const QList <qreal> &list){
+  if(list.isEmpty())
+    return -1;
+
+  qreal min = list.at(0);
+
+  foreach (qreal val, list) {
+    if(val < min)
+      min = val;
+  }
+  return  min;
+}
+
+qreal
+MainWindow :: getMaxVal(const QList <qreal> &list){
+  if(list.isEmpty())
+    return -1;
+  qreal max = list.at(0);
+  foreach(qreal val, list){
+    if(val > max)
+      max = val;
+  }
+  return max;
 }
 
 
 /// Инициализация графических объектов.
 void
 MainWindow :: initElements(){
+  setGuiText();
+  setGuiPlacement();
+  setDefParams();
+  setConnections();
+  mainLayout.addLayout(&layout);
 
+  this->setLayout(&mainLayout);
+  this->resize(1000,500);
+  this->show();
+}
+
+void
+MainWindow ::  setGuiText(){
+  LatitudeLbl   .setText("Довгота, верт");
+  LongtitudeLbl .setText("Широта, гориз");
+  ZoneLbl       .setText("Zone");
+  DecimalLbl    .setText("Decimal:");
+  NMEALbl       .setText("NMEA:");
+  comNumLbl     .setText("COM №:");
+  angleLbl      .setText("Angle:");
+  startB        .setText("Start");             ///< Кнопка запуска работы программы.
+}
+
+
+void
+MainWindow :: setGuiPlacement(){
+  layout.addWidget(&ZoneLbl,         0, 0);
+  layout.addWidget(&LatitudeLbl,     0, 1);
+  layout.addWidget(&LongtitudeLbl,   0, 2);
+  layout.addWidget(&zoneLE,          1, 0);
+  layout.addWidget(&utmLatLE,        1, 1);
+  layout.addWidget(&utmLonLE,        1, 2);
+  layout.addWidget(&DecimalLbl,      2, 0);
+  layout.addWidget(&wgsLatitudeL,    2, 1);
+  layout.addWidget(&wgsLongtitudeL,  2, 2);
+  layout.addWidget(&NMEALbl,         3, 0);
+  layout.addWidget(&nmeaLatitudeL,   3, 1);
+  layout.addWidget(&nmeaLongtitudeL, 3, 2);
+  layout.addWidget(&comNumLbl,       4, 0);
+  layout.addWidget(&comPortNumberSB, 4, 1);
+  layout.addWidget(&angleLbl,        5, 0);
+  layout.addWidget(&angleSB,         5, 1);
+  layout.addWidget(&startB,          6, 1);
+}
+
+void
+MainWindow :: setDefParams(){
   //-- Некоторые значения для выбора угла движения.
   angleSB.setRange(0, 360 - 1);
   angleSB.setWrapping(true);
   angleSB.setValue(180);
-
-
-  // Слой.
-  QHBoxLayout* hLayout = new QHBoxLayout();
-  QGridLayout* layout = new QGridLayout();
-
-  QPushButton* startB = new QPushButton("Start", this);             ///< Кнопка запуска работы программы.
-  connect(startB, &QPushButton::clicked,
-          this,   &MainWindow::startButton);
-
-  QLabel* LatitudeLbl   = new QLabel("Довгота, верт");
-  QLabel* LongtitudeLbl = new QLabel("Широта, гориз");
-  QLabel* ZoneLbl       = new QLabel("Zone");
-  QLabel* DecimalLbl    = new QLabel("Decimal:");
-  QLabel* NMEALbl       = new QLabel("NMEA:");
-  QLabel* comNumLbl     = new QLabel("COM №:");
-  QLabel* angleLbl      = new QLabel("Angle:");
-
-
-  layout->addWidget(ZoneLbl, 0, 0);
-  layout->addWidget(LatitudeLbl, 0, 1);
-  layout->addWidget(LongtitudeLbl, 0, 2);
-
-  layout->addWidget(&zoneLE, 1, 0);
-  layout->addWidget(&utmLatLE, 1, 1);
-  layout->addWidget(&utmLonLE, 1, 2);
-
-  layout->addWidget(DecimalLbl, 2, 0);
-  layout->addWidget(&wgsLatitudeL, 2, 1);
-  layout->addWidget(&wgsLongtitudeL, 2, 2);
-
-  layout->addWidget(NMEALbl, 3, 0);
-  layout->addWidget(&nmeaLatitudeL, 3, 1);
-  layout->addWidget(&nmeaLongtitudeL, 3, 2);
-
-  layout->addWidget(comNumLbl, 4, 0);
-  layout->addWidget(&comPortNumberSB, 4, 1);
-
-  layout->addWidget(angleLbl, 5, 0);
-  layout->addWidget(&angleSB, 5, 1);
-
-  layout->addWidget(startB, 6, 1);
-
-  hLayout->addLayout(layout);
-
-
-  view = new QGraphicsView;
-  scene = new QGraphicsScene(view);
-  QPen pen(Qt::green);
-  QPainter *k =  new QPainter;
-
-  k->drawPoint(20,20);
-
-  scene->addLine(0, 90, 180, 90, pen);
-  scene->addLine(90, 0, 90, 180, pen);
-  scene->addEllipse(20.0, 20.0, 1, 1, pen);
-  view->setScene(scene);
-  hLayout->addWidget(view);
-
-
-  this->setLayout(hLayout);
-  this->show();
 }
 
+
+void
+MainWindow ::  setConnections(){
+  connect(&startB,    &QPushButton  ::  clicked,
+          this,       &MainWindow   ::  startButton);
+}
 
 /// Порядок подключения к COM порту.
 void
 MainWindow ::  connectToComPort(){
   m_serial = new QSerialPort;
   QString portName = QString("/dev/ttyUSB%1").arg(comPortNumberSB.value());
+
   m_serial->setPortName(portName);
-  m_serial->setBaudRate(QSerialPort::Baud9600);
-  m_serial->setDataBits(QSerialPort::Data8);
-  m_serial->setParity(QSerialPort::EvenParity);
-  m_serial->setStopBits(QSerialPort::OneStop);
+  m_serial->setBaudRate   (QSerialPort::Baud9600);
+  m_serial->setDataBits   (QSerialPort::Data8);
+  m_serial->setParity     (QSerialPort::EvenParity);
+  m_serial->setStopBits   (QSerialPort::OneStop);
   m_serial->setFlowControl(QSerialPort::NoFlowControl);
 
   if(m_serial->open(QIODevice::ReadWrite)){
-    ping.start();
     connected = true;
   }
   else{
@@ -342,26 +435,29 @@ MainWindow::getZone( const QString &UTMZone, int &ZoneNumber, int &ZoneLetter ) 
     if ( ( UTMZone.isEmpty() == true ) || ( UTMZone == "_ERROR_" ) )
         return (-1);
 
-    int l = UTMZone.length();
+    int length = UTMZone.length();
 
-    ZoneLetter = UTMZone.at( l-1 ).toUpper().toLatin1();
+    ZoneLetter = UTMZone.at(length - 1).toUpper().toLatin1();
 
     if ( ( 48 <= ZoneLetter ) && ( ZoneLetter <= 57 ) ) // ZoneLetter between 0,..,9
     {
-        ZoneNumber = UTMZone.left( l ).toInt();
+        ZoneNumber = UTMZone.left(length).toInt();
         ZoneLetter = 78;
     }
-    else
-        ZoneNumber = UTMZone.left( l-1 ).toInt();
+    else{
+        ZoneNumber = UTMZone.left(length - 1).toInt();
+    }
 
-    if ( ( ZoneLetter == 73 ) || ( ZoneLetter < 67 ) )
+    if ( ( ZoneLetter == 73 ) || ( ZoneLetter < 67 ) ){
         ZoneLetter = 74;
-
-    if ( ( ZoneLetter == 79 ) || ( ZoneLetter > 88 ) )
+    }
+    if ( ( ZoneLetter == 79 ) || ( ZoneLetter > 88 ) ){
         ZoneLetter = 78;
+    }
 
-    if ( ( ZoneNumber < 1 ) || ( ZoneNumber > 60 ) )
+    if ( ( ZoneNumber < 1 ) || ( ZoneNumber > 60 ) ) {
         return (-2);
+    }
 
     return( 0 );
 }
